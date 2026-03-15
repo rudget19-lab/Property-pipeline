@@ -291,26 +291,22 @@ let donutChart = null;
 let absenteeChart = null;
 let currentFilter = 'all';
 
-const SHEET_ID = '1QjnU0127rWXaO2xDBb277nw42l2Gy49OpwkVsYZIznA';
-const GID = '1586840915';
-const DIRECT_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
-const CSV_URL = `https://api.allorigins.win/raw?url=${encodeURIComponent(DIRECT_URL)}`;
+const API_URL = 'https://script.google.com/macros/s/AKfycbxmFkQg-qqVcZ8z1s3NVmhdLLZwGieMNvXiSz3E-iKf8xlXL9TofG8WDIaVlkQGIa0cVA/exec';
 
 function fetchLiveData() {
   showStatus('Fetching latest data...', false);
-  fetch(CSV_URL)
-    .then(r => { if (!r.ok) throw new Error('Network error'); return r.text(); })
-    .then(csvText => {
-      const results = Papa.parse(csvText, { header: true, skipEmptyLines: true });
-      buildDashboard(results.data);
+  fetch(API_URL)
+    .then(r => { if (!r.ok) throw new Error('Network error'); return r.json(); })
+    .then(data => {
+      buildDashboard(data);
       document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
       showStatus('Live data loaded', false);
       document.getElementById('dropZone').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
     })
     .catch(err => {
-      showStatus('Could not load data — check sheet is shared', true);
-      document.getElementById('dropZone').innerHTML = '<h2>Could not connect to Google Sheets</h2><p>Make sure the sheet is set to Anyone with the link can view, then click Refresh now above.</p>';
+      showStatus('Could not load data — try clicking Refresh now', true);
+      document.getElementById('dropZone').innerHTML = '<h2>Could not connect</h2><p>Click Refresh now in the bar above to try again.</p>';
     });
 }
 
@@ -323,12 +319,15 @@ function showStatus(msg, isError) {
 window.addEventListener('load', fetchLiveData);
 
 function parseDate(val) {
-  if (!val || !val.trim()) return null;
-  const v = val.trim();
-  // DD/MM/YYYY
+  if (!val) return null;
+  // Handle Date objects returned as strings from Apps Script e.g. "Sat Feb 07 2026 00:00:00 GMT+0000"
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) return d;
+  // Handle DD/MM/YYYY
+  const v = String(val).trim();
   let m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return new Date(+m[3], +m[2]-1, +m[1]);
-  // YYYY-MM-DD
+  // Handle YYYY-MM-DD
   m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) return new Date(+m[1], +m[2]-1, +m[3]);
   return null;
