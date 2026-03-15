@@ -9,12 +9,12 @@ function updateVendorLocation(data) {
   const today = new Date(); today.setHours(0,0,0,0);
   
   const active = data.filter(r => {
-    const addr = (r['House number']||'').trim();
-    const loc = (r['Location']||'').trim();
-    const status = (r['Status']||'').trim().toLowerCase();
-    const score = (r['Opportunity (1-10)']||'').trim();
+    const addr = String(r['House number']||'').trim();
+    const loc = String(r['Location']||'').trim();
+    const status = String(r['Status']||'').trim().toLowerCase();
+    const score = String(r['Opportunity (1-10)']||'').trim();
     const hasStatus = status && status !== 'dead';
-    return addr && loc && hasStatus && score;
+    return addr && loc && hasStatus && score && score !== '0';
   });
 
   const vendorLocs = {};
@@ -74,12 +74,12 @@ function updateVendorLocation(data) {
   const today = new Date(); today.setHours(0,0,0,0);
   
   const active = data.filter(r => {
-    const addr = (r['House number']||'').trim();
-    const loc = (r['Location']||'').trim();
-    const status = (r['Status']||'').trim().toLowerCase();
-    const score = (r['Opportunity (1-10)']||'').trim();
+    const addr = String(r['House number']||'').trim();
+    const loc = String(r['Location']||'').trim();
+    const status = String(r['Status']||'').trim().toLowerCase();
+    const score = String(r['Opportunity (1-10)']||'').trim();
     const hasStatus = status && status !== 'dead';
-    return addr && loc && hasStatus && score;
+    return addr && loc && hasStatus && score && score !== '0';
   });
 
   const vendorLocs = {};
@@ -320,16 +320,19 @@ window.addEventListener('load', fetchLiveData);
 
 function parseDate(val) {
   if (!val) return null;
-  // Handle Date objects returned as strings from Apps Script e.g. "Sat Feb 07 2026 00:00:00 GMT+0000"
-  const d = new Date(val);
-  if (!isNaN(d.getTime())) return d;
-  // Handle DD/MM/YYYY
   const v = String(val).trim();
+  if (!v || v === '0' || v === '') return null;
+  // DD/MM/YYYY - primary format from Apps Script
   let m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return new Date(+m[3], +m[2]-1, +m[1]);
-  // Handle YYYY-MM-DD
+  // YYYY-MM-DD
   m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  // Last resort - try native parse but only for clear date strings
+  if (v.includes('-') || v.includes('/')) {
+    const d = new Date(v);
+    if (!isNaN(d.getTime()) && d.getFullYear() > 2000) return d;
+  }
   return null;
 }
 
@@ -341,19 +344,19 @@ function buildDashboard(data) {
 
   // Active = has address + location + status not 'dead'
   const active = data.filter(r => {
-    const addr = (r['House number']||'').trim();
-    const loc = (r['Location']||'').trim();
-    const status = (r['Status']||'').trim().toLowerCase();
-    const score = (r['Opportunity (1-10)']||'').trim();
+    const addr = String(r['House number']||'').trim();
+    const loc = String(r['Location']||'').trim();
+    const status = String(r['Status']||'').trim().toLowerCase();
+    const score = String(r['Opportunity (1-10)']||'').trim();
     const hasStatus = status && status !== 'dead';
-    return addr && loc && hasStatus && score;
+    return addr && loc && hasStatus && score && score !== '0';
   });
 
   allProps = active.map(r => {
-    const letterDate = parseDate(r['Letter sent date']);
-    const followUp = parseDate(r['Follow-up date']);
-    const score = parseFloat(r['Opportunity (1-10)']||0)||0;
-    const status = (r['Status']||'').trim();
+    const letterDate = parseDate(r['Letter sent date'] || r['Letter Date'] || r['Contacted?']);
+    const followUp = parseDate(r['Follow-up date'] || r['Follow-up Due'] || r['Follow Up Due']);
+    const score = parseFloat(r['Opportunity (1-10)'] || r['Opportunity'] || 0) || 0;
+    const status = String(r['Status'] || '').trim();
     const hasLetter = !!letterDate;
 
     let urgency = 'noletter';
