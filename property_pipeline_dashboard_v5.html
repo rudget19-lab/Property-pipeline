@@ -293,7 +293,8 @@ let currentFilter = 'all';
 
 const SHEET_ID = '1QjnU0127rWXaO2xDBb277nw42l2Gy49OpwkVsYZIznA';
 const SHEET_NAME = 'Walking Streets';
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+const DIRECT_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+const CSV_URL = `https://corsproxy.io/?${encodeURIComponent(DIRECT_URL)}`;
 
 function fetchLiveData() {
   showStatus('Fetching latest data...', false);
