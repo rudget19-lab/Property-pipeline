@@ -292,8 +292,8 @@ let absenteeChart = null;
 let currentFilter = 'all';
 
 const SHEET_ID = '1QjnU0127rWXaO2xDBb277nw42l2Gy49OpwkVsYZIznA';
-const SHEET_NAME = 'Walking Streets';
-const DIRECT_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+const GID = '1586840915';
+const DIRECT_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
 const CSV_URL = `https://api.allorigins.win/raw?url=${encodeURIComponent(DIRECT_URL)}`;
 
 function fetchLiveData() {
