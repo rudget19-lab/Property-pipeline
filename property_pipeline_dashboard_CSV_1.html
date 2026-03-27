@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Property Pipeline Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js">
+function updateVendorLocation(data) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  
+  const active = data.filter(r => {
+    const addr = (r['House number']||'').trim();
+    const loc = (r['Location']||'').trim();
+    const status = (r['Status']||'').trim().toLowerCase();
+    const score = (r['Opportunity (1-10)']||'').trim();
+    const hasStatus = status && status !== 'dead';
+    return addr && loc && hasStatus && score;
+  });
+
+  const vendorLocs = {};
+  let outofarea = 0, local = 0, unknown = 0;
+
+  active.forEach(r => {
+    let vl = (r['Location (Vendor)']||'').trim();
+    const propLoc = (r['Location']||'').trim();
+    if (!vl) { unknown++; return; }
+    // Normalise same-as-address variations
+    if (vl.toLowerCase().includes('same')) { vl = 'Local (same area)'; local++; }
+    else if (vl.toLowerCase() === propLoc.toLowerCase() || vl.toLowerCase() === 'crewe') { local++; }
+    else { outofarea++; }
+    vendorLocs[vl] = (vendorLocs[vl]||0)+1;
+  });
+
+  // Vendor bars
+  const sorted = Object.entries(vendorLocs).sort((a,b)=>b[1]-a[1]);
+  const total = active.length||1;
+  const colours = ['#378ADD','#1D9E75','#EF9F27','#888780','#639922','#e24b4a'];
+  document.getElementById('vendor-bars').innerHTML = sorted.length ? sorted.map(([loc,count],i)=>
+    `<div class="bar-label"><span>${loc}</span><span>${count}</span></div>
+     <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(count/total*100)}%;background:${colours[i%colours.length]};"></div></div>`
+  ).join('') + `<div style="font-size:11px;color:#aaa;margin-top:6px;">${unknown} owners — location unknown</div>`
+  : '<div class="no-data" style="font-size:12px;padding:0.5rem 0;">No vendor locations filled in yet</div>';
+
+  // Absentee chart
+  if (absenteeChart) absenteeChart.destroy();
+  absenteeChart = new Chart(document.getElementById('absenteeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Out of area', 'Local', 'Unknown'],
+      datasets: [{ data: [outofarea, local, unknown], backgroundColor: ['#e24b4a','#639922','#888780'], borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, cutout:'60%', plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw}`}} } }
+  });
+  const aTotal = outofarea+local+unknown||1;
+  document.getElementById('absentee-legend').innerHTML = [
+    ['#e24b4a',`Out of area (${Math.round(outofarea/aTotal*100)}%)`],
+    ['#639922',`Local (${Math.round(local/aTotal*100)}%)`],
+    ['#888780',`Unknown (${Math.round(unknown/aTotal*100)}%)`]
+  ].map(([c,l])=>`<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join('');
+
+  // Top opportunities — highest score with no letter yet
+  const topOpps = allProps.filter(p=>!p.hasLetter&&p.score>=7).sort((a,b)=>b.score-a.score).slice(0,5);
+  document.getElementById('top-opps').innerHTML = topOpps.length ? topOpps.map(p=>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="font-size:13px;font-weight:600;color:#1a1a2e;flex:1;">${p.address}</span>
+      <span class="score-pill">${p.score}/10</span>
+    </div>`
+  ).join('') : '<div class="no-data" style="font-size:12px;padding:0.5rem 0;">All high-score leads have letters sent</div>';
+}
+
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
+function updateVendorLocation(data) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  
+  const active = data.filter(r => {
+    const addr = (r['House number']||'').trim();
+    const loc = (r['Location']||'').trim();
+    const status = (r['Status']||'').trim().toLowerCase();
+    const score = (r['Opportunity (1-10)']||'').trim();
+    const hasStatus = status && status !== 'dead';
+    return addr && loc && hasStatus && score;
+  });
+
+  const vendorLocs = {};
+  let outofarea = 0, local = 0, unknown = 0;
+
+  active.forEach(r => {
+    let vl = (r['Location (Vendor)']||'').trim();
+    const propLoc = (r['Location']||'').trim();
+    if (!vl) { unknown++; return; }
+    // Normalise same-as-address variations
+    if (vl.toLowerCase().includes('same')) { vl = 'Local (same area)'; local++; }
+    else if (vl.toLowerCase() === propLoc.toLowerCase() || vl.toLowerCase() === 'crewe') { local++; }
+    else { outofarea++; }
+    vendorLocs[vl] = (vendorLocs[vl]||0)+1;
+  });
+
+  // Vendor bars
+  const sorted = Object.entries(vendorLocs).sort((a,b)=>b[1]-a[1]);
+  const total = active.length||1;
+  const colours = ['#378ADD','#1D9E75','#EF9F27','#888780','#639922','#e24b4a'];
+  document.getElementById('vendor-bars').innerHTML = sorted.length ? sorted.map(([loc,count],i)=>
+    `<div class="bar-label"><span>${loc}</span><span>${count}</span></div>
+     <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(count/total*100)}%;background:${colours[i%colours.length]};"></div></div>`
+  ).join('') + `<div style="font-size:11px;color:#aaa;margin-top:6px;">${unknown} owners — location unknown</div>`
+  : '<div class="no-data" style="font-size:12px;padding:0.5rem 0;">No vendor locations filled in yet</div>';
+
+  // Absentee chart
+  if (absenteeChart) absenteeChart.destroy();
+  absenteeChart = new Chart(document.getElementById('absenteeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Out of area', 'Local', 'Unknown'],
+      datasets: [{ data: [outofarea, local, unknown], backgroundColor: ['#e24b4a','#639922','#888780'], borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, cutout:'60%', plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw}`}} } }
+  });
+  const aTotal = outofarea+local+unknown||1;
+  document.getElementById('absentee-legend').innerHTML = [
+    ['#e24b4a',`Out of area (${Math.round(outofarea/aTotal*100)}%)`],
+    ['#639922',`Local (${Math.round(local/aTotal*100)}%)`],
+    ['#888780',`Unknown (${Math.round(unknown/aTotal*100)}%)`]
+  ].map(([c,l])=>`<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join('');
+
+  // Top opportunities — highest score with no letter yet
+  const topOpps = allProps.filter(p=>!p.hasLetter&&p.score>=7).sort((a,b)=>b.score-a.score).slice(0,5);
+  document.getElementById('top-opps').innerHTML = topOpps.length ? topOpps.map(p=>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="font-size:13px;font-weight:600;color:#1a1a2e;flex:1;">${p.address}</span>
+      <span class="score-pill">${p.score}/10</span>
+    </div>`
+  ).join('') : '<div class="no-data" style="font-size:12px;padding:0.5rem 0;">All high-score leads have letters sent</div>';
+}
+
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; }
+  .topbar { background: #1a1a2e; padding: 1.25rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+  .topbar-title { font-size: 20px; font-weight: 700; color: #fff; }
+  .topbar-sub { font-size: 12px; color: #9999bb; margin-top: 3px; }
+  .last-updated { font-size: 11px; color: #9999bb; }
+  .upload-bar { background: #16213e; padding: 0.85rem 2rem; display: flex; align-items: center; gap: 1rem; border-bottom: 1px solid #0f3460; }
+  .upload-label { font-size: 13px; color: #aaaacc; }
+  .upload-btn { font-size: 12px; padding: 6px 16px; background: #0f3460; color: #7eb8f7; border: 1px solid #378ADD; border-radius: 6px; cursor: pointer; }
+  .upload-btn:hover { background: #378ADD; color: white; }
+  .upload-status { font-size: 12px; color: #4ade80; }
+  .upload-status.error { color: #f87171; }
+  .drop-zone { margin: 2rem; padding: 3rem; border: 2px dashed #ccc; border-radius: 12px; text-align: center; background: white; cursor: pointer; }
+  .drop-zone:hover, .drop-zone.dragover { border-color: #378ADD; background: #f0f7ff; }
+  .drop-zone h2 { font-size: 18px; color: #1a1a2e; margin-bottom: 0.5rem; }
+  .drop-zone p { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+  .drop-zone .steps { text-align: left; display: inline-block; font-size: 13px; color: #555; line-height: 2.2; }
+  .dash { padding: 1.5rem 2rem; display: none; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .metric { background: #fff; border-radius: 10px; padding: 1.1rem 1.25rem; border: 1px solid #e5e5e5; }
+  .metric-label { font-size: 11px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .metric-value { font-size: 32px; font-weight: 700; color: #1a1a2e; }
+  .metric-value.red { color: #e24b4a; }
+  .metric-value.amber { color: #BA7517; }
+  .metric-value.green { color: #3B6D11; }
+  .metric-sub { font-size: 11px; color: #aaa; margin-top: 4px; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .chart-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 1.25rem; }
+  .chart-title { font-size: 12px; font-weight: 700; color: #1a1a2e; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .table-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; }
+  .table-filters { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .filter-btn { font-size: 12px; padding: 4px 14px; border: 1px solid #ddd; border-radius: 20px; background: white; color: #555; cursor: pointer; }
+  .filter-btn.active { background: #1a1a2e; color: white; border-color: #1a1a2e; }
+  .prop-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+  .prop-row:last-child { border-bottom: none; }
+  .badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; white-space: nowrap; min-width: 76px; text-align: center; }
+  .b-red { background: #FCEBEB; color: #A32D2D; border: 1px solid #F09595; }
+  .b-amber { background: #FAEEDA; color: #854F0B; border: 1px solid #FAC775; }
+  .b-green { background: #EAF3DE; color: #3B6D11; border: 1px solid #C0DD97; }
+  .b-gray { background: #f0f0f0; color: #555; border: 1px solid #ddd; }
+  .prop-name { font-size: 13px; font-weight: 600; color: #1a1a2e; flex: 1; }
+  .prop-location { font-size: 12px; color: #888; min-width: 80px; }
+  .prop-date { font-size: 12px; color: #888; min-width: 110px; }
+  .score-pill { font-size: 11px; background: #f0f0f0; color: #555; padding: 2px 8px; border-radius: 6px; font-weight: 700; min-width: 40px; text-align: center; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; font-size: 12px; color: #555; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-bottom: 4px; }
+  .progress-bar { height: 8px; background: #f0f0f0; border-radius: 4px; margin-bottom: 10px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; }
+  .no-data { font-size: 13px; color: #aaa; padding: 1.5rem 0; text-align: center; }
+  .footer { text-align: center; font-size: 11px; color: #aaa; padding: 1rem 2rem 2rem; }
+  input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-title">Property Pipeline Dashboard</div>
+    <div class="topbar-sub">Walking Streets · Tom Rudge</div>
+  </div>
+  <span class="last-updated" id="lastUpdated">No data loaded</span>
+</div>
+
+<div class="upload-bar">
+  <span class="upload-label">Refresh data:</span>
+  <button class="upload-btn" onclick="document.getElementById('csvInput').click()">Upload CSV</button>
+  <input type="file" id="csvInput" accept=".csv" onchange="handleFile(this)">
+  <span class="upload-status" id="uploadStatus"></span>
+</div>
+
+<div class="drop-zone" id="dropZone"
+  ondrop="handleDrop(event)"
+  ondragover="handleDragOver(event)"
+  ondragleave="handleDragLeave(event)"
+  onclick="document.getElementById('csvInput').click()">
+  <h2>Drop your CSV here to load the dashboard</h2>
+  <p>Export fresh from Google Sheets any time you want to refresh</p>
+  <div class="steps">
+    <span>1. Open your Google Sheet</span>
+    <span>2. File → Download → CSV (.csv)</span>
+    <span>3. Drop the file here or click Upload CSV above</span>
+  </div>
+</div>
+
+<div class="dash" id="dashboard">
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">Total active leads</div>
+      <div class="metric-value" id="m-total">—</div>
+      <div class="metric-sub">Excl. dead leads</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Letters sent</div>
+      <div class="metric-value green" id="m-letters">—</div>
+      <div class="metric-sub">In follow-up cadence</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Overdue now</div>
+      <div class="metric-value red" id="m-overdue">—</div>
+      <div class="metric-sub">Door knock required</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Due this week</div>
+      <div class="metric-value amber" id="m-due">—</div>
+      <div class="metric-sub">Action before Friday</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">Pipeline by stage</div>
+      <div class="legend" id="donut-legend"></div>
+      <div style="position:relative;width:100%;height:180px;">
+        <canvas id="doughnut"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Leads by area</div>
+      <div id="area-bars"></div>
+      <div style="margin-top:1.25rem;">
+        <div class="chart-title">Score distribution</div>
+        <div id="score-bars"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-row" style="grid-template-columns: 1fr 1fr 1fr;">
+    <div class="chart-card">
+      <div class="chart-title">Vendor location</div>
+      <div id="vendor-bars"><div class="no-data" style="padding:0.5rem 0;font-size:12px;">Load CSV to see data</div></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Owner location — local vs out of area</div>
+      <div style="position:relative;width:100%;height:140px;">
+        <canvas id="absenteeChart"></canvas>
+      </div>
+      <div class="legend" id="absentee-legend" style="margin-top:8px;"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Top opportunities</div>
+      <div id="top-opps"><div class="no-data" style="padding:0.5rem 0;font-size:12px;">Load CSV to see data</div></div>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="chart-title" style="margin-bottom:0.75rem;">Priority action list — letters sent only</div>
+    <div class="table-filters">
+      <button class="filter-btn active" onclick="filterTable('all',this)">All letters (</button>
+      <button class="filter-btn" onclick="filterTable('overdue',this)">Overdue</button>
+      <button class="filter-btn" onclick="filterTable('due',this)">Due this week</button>
+      <button class="filter-btn" onclick="filterTable('pending',this)">Pending</button>
+    </div>
+    <div id="prop-table"></div>
+  </div>
+</div>
+
+<div class="footer">Property Pipeline · Export CSV from Google Sheets to refresh · 6-week follow-up cadence</div>
+
+<script>
+let allProps = [];
+let donutChart = null;
+let absenteeChart = null;
+let currentFilter = 'all';
+
+function handleDragOver(e) { e.preventDefault(); document.getElementById('dropZone').classList.add('dragover'); }
+function handleDragLeave() { document.getElementById('dropZone').classList.remove('dragover'); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.csv')) processCSV(f);
+  else showStatus('Please drop a CSV file', true);
+}
+function handleFile(input) { if (input.files[0]) processCSV(input.files[0]); }
+
+function showStatus(msg, isError) {
+  const el = document.getElementById('uploadStatus');
+  el.textContent = msg;
+  el.className = 'upload-status' + (isError ? ' error' : '');
+}
+
+function parseDate(val) {
+  if (!val || !val.trim()) return null;
+  const v = val.trim();
+  // DD/MM/YYYY
+  let m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2]-1, +m[1]);
+  // YYYY-MM-DD
+  m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  return null;
+}
+
+function processCSV(file) {
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: function(results) {
+      buildDashboard(results.data);
+      document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      showStatus('Loaded ' + results.data.length + ' rows', false);
+      document.getElementById('dropZone').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+    },
+    error: () => showStatus('Error reading file', true)
+  });
+}
+
+function buildDashboard(data) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const in7 = new Date(today); in7.setDate(today.getDate()+7);
+
+  // Active = has address + location + status not 'dead'
+  const active = data.filter(r => {
+    const addr = (r['House number']||'').trim();
+    const loc = (r['Location']||'').trim();
+    const status = (r['Status']||'').trim().toLowerCase();
+    const score = (r['Opportunity (1-10)']||'').trim();
+    const hasStatus = status && status !== 'dead';
+    return addr && loc && hasStatus && score;
+  });
+
+  allProps = active.map(r => {
+    const letterDate = parseDate(r['Letter sent date']);
+    const followUp = parseDate(r['Follow-up date']);
+    const score = parseFloat(r['Opportunity (1-10)']||0)||0;
+    const status = (r['Status']||'').trim();
+    const hasLetter = !!letterDate;
+
+    let urgency = 'noletter';
+    let daysInfo = 'No letter sent';
+
+    if (hasLetter && followUp) {
+      const diff = Math.floor((followUp - today) / 86400000);
+      if (diff < 0) {
+        urgency = 'overdue';
+        daysInfo = Math.abs(diff) + ' day' + (Math.abs(diff)!==1?'s':'') + ' overdue';
+      } else if (followUp <= in7) {
+        urgency = 'due';
+        daysInfo = 'Due ' + followUp.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      } else {
+        urgency = 'pending';
+        daysInfo = 'Due ' + followUp.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      }
+    } else if (hasLetter) {
+      urgency = 'pending';
+      daysInfo = 'Letter sent';
+    }
+
+    let vendorLocation = (r['Location (Vendor)']||'').trim();
+    return { address: r['House number']||'', location: r['Location']||'', score, status, urgency, daysInfo, hasLetter, followUp, letterDate, vendorLocation };
+  });
+
+  updateMetrics();
+  updateDonut();
+  updateAreaBars(active);
+  updateScoreBars();
+  renderTable(currentFilter);
+  updateVendorLocation(data);
+
+  // Fix filter button labels with counts
+  const btns = document.querySelectorAll('.filter-btn');
+  const withLetters = allProps.filter(p=>p.hasLetter);
+  btns[0].textContent = 'All letters (' + withLetters.length + ')';
+  btns[1].textContent = 'Overdue (' + allProps.filter(p=>p.urgency==='overdue').length + ')';
+  btns[2].textContent = 'Due this week (' + allProps.filter(p=>p.urgency==='due').length + ')';
+  btns[3].textContent = 'Pending (' + allProps.filter(p=>p.urgency==='pending').length + ')';
+}
+
+function updateMetrics() {
+  document.getElementById('m-total').textContent = allProps.length;
+  document.getElementById('m-letters').textContent = allProps.filter(p=>p.hasLetter).length;
+  document.getElementById('m-overdue').textContent = allProps.filter(p=>p.urgency==='overdue').length;
+  document.getElementById('m-due').textContent = allProps.filter(p=>p.urgency==='due').length;
+}
+
+function updateDonut() {
+  const stages = {};
+  allProps.forEach(p => { const s = p.status||'No status'; stages[s]=(stages[s]||0)+1; });
+  const colourMap = {'Letter Sent':'#639922','Letter sent':'#639922','Check':'#EF9F27','Action':'#1D9E75','Investigate':'#1D9E75','No status':'#888780'};
+  const labels = Object.keys(stages);
+  const values = labels.map(l=>stages[l]);
+  const bgs = labels.map(l=>colourMap[l]||'#888780');
+  const total = values.reduce((a,b)=>a+b,0)||1;
+
+  document.getElementById('donut-legend').innerHTML = labels.map((l,i)=>
+    `<span><span class="legend-dot" style="background:${bgs[i]}"></span>${l} (${Math.round(values[i]/total*100)}%)</span>`
+  ).join('');
+
+  if (donutChart) donutChart.destroy();
+  donutChart = new Chart(document.getElementById('doughnut'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: bgs, borderWidth: 2, borderColor: '#fff', hoverOffset: 4 }] },
+    options: { responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw} leads`}} } }
+  });
+}
+
+function updateAreaBars(active) {
+  const areas = {};
+  active.forEach(r => { const l=(r['Location']||'').trim(); if(l) areas[l]=(areas[l]||0)+1; });
+  const total = active.length||1;
+  const sorted = Object.entries(areas).sort((a,b)=>b[1]-a[1]);
+  const colours = ['#378ADD','#1D9E75','#EF9F27','#888780','#639922'];
+  document.getElementById('area-bars').innerHTML = sorted.map(([area,count],i)=>
+    `<div class="bar-label"><span>${area}</span><span>${count}</span></div>
+     <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(count/total*100)}%;background:${colours[i%colours.length]};"></div></div>`
+  ).join('');
+}
+
+function updateScoreBars() {
+  const high = allProps.filter(p=>p.score>=9).length;
+  const mid = allProps.filter(p=>p.score>=6&&p.score<9).length;
+  const low = allProps.filter(p=>p.score>0&&p.score<6).length;
+  const total = allProps.length||1;
+  document.getElementById('score-bars').innerHTML = `
+    <div class="bar-label"><span>Score 9-10</span><span>${high}</span></div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(high/total*100)}%;background:#639922;"></div></div>
+    <div class="bar-label"><span>Score 6-8</span><span>${mid}</span></div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(mid/total*100)}%;background:#EF9F27;"></div></div>
+    <div class="bar-label"><span>Score 1-5</span><span>${low}</span></div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(low/total*100)}%;background:#888780;"></div></div>`;
+}
+
+function filterTable(type, btn) {
+  currentFilter = type;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable(type);
+}
+
+function renderTable(filter) {
+  const order = {overdue:0,due:1,pending:2,noletter:3};
+  let props = allProps.filter(p=>p.hasLetter);
+  if (filter==='overdue') props = props.filter(p=>p.urgency==='overdue');
+  else if (filter==='due') props = props.filter(p=>p.urgency==='due');
+  else if (filter==='pending') props = props.filter(p=>p.urgency==='pending');
+
+  props.sort((a,b)=>{
+    const ao=order[a.urgency]??9, bo=order[b.urgency]??9;
+    if(ao!==bo) return ao-bo;
+    if(a.followUp&&b.followUp) return a.followUp-b.followUp;
+    return b.score-a.score;
+  });
+
+  if (!props.length) {
+    document.getElementById('prop-table').innerHTML = '<div class="no-data">No properties in this category</div>';
+    return;
+  }
+
+  const badgeMap = {overdue:['b-red','Overdue'],due:['b-amber','Due now'],pending:['b-green','Pending'],noletter:['b-gray','No letter']};
+  document.getElementById('prop-table').innerHTML = props.map(p=>{
+    const [cls,label] = badgeMap[p.urgency]||['b-gray','Unknown'];
+    const isDirect = p.vendorLocation && p.vendorLocation.toLowerCase().startsWith('direct');
+    const vc = p.vendorLocation
+      ? (isDirect
+          ? {bg:'#FCEBEB',col:'#A32D2D',border:'#F09595'}
+          : {bg:'#f0f0f0',col:'#555',border:'#e0e0e0'})
+      : null;
+    const vendorTag = vc ? `<span style="font-size:11px;padding:2px 7px;border-radius:6px;background:${vc.bg};color:${vc.col};border:1px solid ${vc.border};white-space:nowrap;display:inline-block;">${p.vendorLocation}</span>` : '<span style="display:inline-block;min-width:120px;"></span>';
+    return `<div class="prop-row" style="display:grid;grid-template-columns:80px 1fr 90px 120px 140px 50px;align-items:center;gap:10px;">
+      <span class="badge ${cls}">${label}</span>
+      <span class="prop-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.address}</span>
+      <span class="prop-location" style="font-size:12px;color:#888;">${p.location}</span>
+      <span class="prop-date" style="font-size:12px;color:#888;">${p.daysInfo}</span>
+      ${vendorTag}
+      ${p.score?`<span class="score-pill" style="text-align:right;">${p.score}/10</span>`:'<span></span>'}
+    </div>`;
+  }).join('');
+}
+
+function updateVendorLocation(data) {
+  const active = data.filter(r => {
+    const addr = (r['House number']||'').trim();
+    const loc = (r['Location']||'').trim();
+    const status = (r['Status']||'').trim().toLowerCase();
+    const score = (r['Opportunity (1-10)']||'').trim();
+    return addr && loc && status && status !== 'dead' && score;
+  });
+
+  const vendorLocs = {};
+  let directPosted = 0, directSame = 0, outofarea = 0, local = 0, unknown = 0;
+
+  active.forEach(r => {
+    let vl = (r['Location (Vendor)']||'').trim();
+    const propLoc = (r['Location']||'').trim();
+    if (!vl) { unknown++; return; }
+
+    const vlLower = vl.toLowerCase();
+    if (vlLower.includes('direct - letter posted')) { directPosted++; }
+    else if (vlLower.includes('direct - no title')) { directSame++; }
+    else if (vlLower.includes('direct - same title')) { directSame++; }
+    else if (vlLower === propLoc.toLowerCase() || vlLower === 'crewe') { local++; }
+    else { outofarea++; }
+
+    vendorLocs[vl] = (vendorLocs[vl]||0)+1;
+  });
+
+  const colourMap = {
+    'Direct - Letter posted':      '#639922',
+    'Direct - No title register':  '#e24b4a',
+    'Direct - Same title address': '#378ADD',
+    'London':                      '#D85A30',
+    'Isles of Scilly':             '#D85A30',
+    'Scotland/ Ireland':           '#7F77DD',
+    'Stoke':                       '#EF9F27',
+    'Alsager':                     '#EF9F27',
+    'Reditch':                     '#EF9F27',
+    'Crewe':                       '#888780',
+  };
+  const defaultColours = ['#888780','#B4B2A9','#D3D1C7'];
+  let defaultIdx = 0;
+
+  const sorted = Object.entries(vendorLocs).sort((a,b)=>b[1]-a[1]);
+  const total = active.length||1;
+
+  document.getElementById('vendor-bars').innerHTML = sorted.length ? sorted.map(([loc,count])=>{
+    const colour = colourMap[loc] || defaultColours[defaultIdx++%defaultColours.length];
+    return `<div class="bar-label"><span>${loc}</span><span>${count}</span></div>
+     <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(count/total*100)}%;background:${colour};"></div></div>`;
+  }).join('') + `<div style="font-size:11px;color:#aaa;margin-top:6px;">${unknown} owners — location not yet recorded</div>`
+  : '<div class="no-data" style="font-size:12px;padding:0.5rem 0;">No vendor locations filled in yet</div>';
+
+  // Build donut from actual vendor location values (excluding unknown/blank)
+  if (absenteeChart) absenteeChart.destroy();
+  const vendorColours = {
+    'Direct - Letter posted':      '#639922',
+    'Direct - No title register':  '#e24b4a',
+    'Direct - Same title address': '#378ADD',
+    'London':                      '#D85A30',
+    'Isles of Scilly':             '#D85A30',
+    'Scotland/ Ireland':           '#7F77DD',
+    'Stoke':                       '#EF9F27',
+    'Alsager':                     '#EF9F27',
+    'Reditch':                     '#EF9F27',
+    'Crewe':                       '#888780',
+  };
+  const donutData = Object.entries(vendorLocs)
+    .filter(([l]) => l && l.trim())
+    .sort((a,b) => b[1]-a[1])
+    .map(([l,v]) => ({ label: l, value: v, colour: vendorColours[l] || '#888780' }));
+
+  absenteeChart = new Chart(document.getElementById('absenteeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: donutData.map(d=>d.label),
+      datasets: [{ data: donutData.map(d=>d.value), backgroundColor: donutData.map(d=>d.colour), borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, cutout:'60%', plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw}`}} } }
+  });
+
+  const aTotal = donutData.reduce((s,d)=>s+d.value,0)||1;
+  document.getElementById('absentee-legend').innerHTML = donutData.map(d=>
+    `<span><span class="legend-dot" style="background:${d.colour}"></span>${d.label} (${d.value})</span>`
+  ).join('');
+
+  // Top opportunities — highest score no letter
+  const topOpps = allProps.filter(p=>!p.hasLetter&&p.score>=7).sort((a,b)=>b.score-a.score).slice(0,5);
+  document.getElementById('top-opps').innerHTML = topOpps.length ? topOpps.map(p=>{
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="font-size:13px;font-weight:600;color:#1a1a2e;flex:1;">${p.address}</span>
+      <span style="font-size:12px;color:#888;">${p.location}</span>
+      <span class="score-pill">${p.score}/10</span>
+    </div>`;
+  }).join('') : '<div class="no-data" style="font-size:12px;padding:0.5rem 0;">All high-score leads have letters sent</div>';
+}
+</script>
